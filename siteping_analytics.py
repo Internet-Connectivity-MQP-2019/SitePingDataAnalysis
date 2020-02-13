@@ -12,8 +12,10 @@ import matplotlib.colors as mcolors
 
 
 def main():
-    raw_df = pd.read_json('siteping_cleaned3_pretty.json')
-    df = raw_df.loc[~raw_df['isMobile']]
+    ##raw_df = pd.read_json('siteping_cleaned3_pretty.json')
+    ##df = raw_df.loc[~raw_df['isMobile']]
+
+    df = getDataFrame()
 
     df = df.loc[df['state'].isin(list(us.states.mapping('abbr', 'name').keys()))]
 
@@ -83,7 +85,7 @@ def main():
             x = df[df['state'] == state]['rtt']
 
             color = colors[j % len(colors)]
-            plt.hist(x, bins=400, normed=True, cumulative=True, label="{} ({:n})".format(state, clique.ranks[j]),
+            plt.hist(x, bins=400, density=True, cumulative=True, label="{} ({:n})".format(state, clique.ranks[j]),
                      histtype='step', alpha=0.8, color=color, range=(0, 300))
             j += 1
 
@@ -105,7 +107,7 @@ def main():
                 x = pd.concat([x, df[df['state'] == state]['rtt']])
 
         color = colors[clique.cid % len(colors)]
-        plt.hist(x, bins=400, normed=True, cumulative=True, label="{}".format('%s' % ', '.join(clique.states)),
+        plt.hist(x, bins=400, density=True, cumulative=True, label="{}".format('%s' % ', '.join(clique.states)),
                  histtype='step', alpha=0.8, color=color, range=(0, 300))
         plt.axvline(x=np.median(x), color=color)
     plt.legend(loc='upper left')
@@ -139,6 +141,32 @@ class CliqueOfStates:
 
     def __lt__(self, other):
         return self.mean_value() < other.mean_value()
+
+def getDataFrame(z=2):
+    if not os.path.isdir("./pickles"):
+        os.mkdir("pickles")
+
+    pickle_filename = './pickles/{}_{}_dataFrame_pickle.zip'.format(z, 'sitePing')
+
+    if not os.path.isfile(pickle_filename):
+        print("Creating pickle...")
+
+        rawDf = pd.read_json('siteping_cleaned3_pretty.json')
+        df = rawDf.loc[ ~rawDf['isMobile']]
+
+        print("Filtering by RTT; RTT max/min/avg/stdev is {:.3f}/{:.3f}/{:.3f}/{:.3f}".format(df["rtt"].max(), df["rtt"].min(), df["rtt"].mean(), df["rtt"].std()))
+        # Generate z scores for individual measurements within server pairs
+        df['z_score'] = df.groupby(['state'])['rtt'].apply(lambda x: (x - x.mean()) / x.std())
+        df = df[abs(df['z_score']) <= z]
+        print("Filtered by RTT; RTT max/min/avg/stdev is now {:.3f}/{:.3f}/{:.3f}/{:.3f}".format(df["rtt"].max(), df["rtt"].min(), df["rtt"].mean(), df["rtt"].std()))
+
+        df.to_pickle(pickle_filename)
+
+    else:
+        df = pd.read_pickle(pickle_filename)
+
+    return df
+
 
 
 if __name__ == "__main__":
